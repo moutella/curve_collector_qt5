@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QAction
+from PyQt5.QtGui import QIcon
 from mycanvas import *
 from mymodel import *
 
@@ -21,43 +21,48 @@ class MyWindow(QMainWindow):
         tb.addAction(fit)
 
         # Pan
-        panR = QAction(QIcon("icons/panright.jpg"), "panR", self)
-        tb.addAction(panR)
-        panL = QAction(QIcon("icons/panleft.jpg"), "panL", self)
-        tb.addAction(panL)
-        panU = QAction(QIcon("icons/panup.jpg"), "panU", self)
-        tb.addAction(panU)
-        panD = QAction(QIcon("icons/pandown.jpg"), "panD", self)
-        tb.addAction(panD)
+        pan_right = QAction(QIcon("icons/panright.jpg"), "pan_right", self)
+        tb.addAction(pan_right)
+        pan_left = QAction(QIcon("icons/panleft.jpg"), "pan_left", self)
+        tb.addAction(pan_left)
+        pan_up = QAction(QIcon("icons/panup.jpg"), "pan_up", self)
+        tb.addAction(pan_up)
+        pan_down = QAction(QIcon("icons/pandown.jpg"), "pan_down", self)
+        tb.addAction(pan_down)
 
         # Zoom
-        zoomIn = QAction(QIcon("icons/zoomin.jpg"), "zoomIn", self)
-        tb.addAction(zoomIn)
-        zoomOut = QAction(QIcon("icons/zoomout.jpg"), "zoomOut", self)
-        tb.addAction(zoomOut)
+        zoom_in = QAction(QIcon("icons/zoomin.jpg"), "zoom_in", self)
+        tb.addAction(zoom_in)
+        zoom_out = QAction(QIcon("icons/zoomout.jpg"), "zoom_out", self)
+        tb.addAction(zoom_out)
 
-        reset = QAction(QIcon("icons/zoomout.jpg"), "reset", self)
+        reset = QAction(QIcon("icons/delete.jpg"), "reset", self)
         tb.addAction(reset)
+
+        generate_grid = QAction(QIcon("icons/grid.jpg"), "grid", self)
+        tb.addAction(generate_grid)
 
         tb.actionTriggered[QAction].connect(self.tbpressed)
 #        tb2 = self.addToolBar("Draw")
 #        line = QAction(QIcon("icons/fit.jpg"),"line",self)
 #        tb2.addAction(line)
 
-    def tbpressed(self, a):
-        if a.text() == "fit":
+    def tbpressed(self, action):
+        if action.text() == "fit":
             self.canvas.fitWorldToViewport()
-        if a.text() == 'panR':
+        if action.text() == 'pan_right':
             self.canvas.panWorldWindow(-0.2, 0)
-        if a.text() == 'panL':
+        if action.text() == 'pan_left':
             self.canvas.panWorldWindow(0.2, 0)
-        if a.text() == 'panU':
+        if action.text() == 'pan_up':
             self.canvas.panWorldWindow(0, -0.2)
-        if a.text() == 'panD':
+        if action.text() == 'pan_down':
             self.canvas.panWorldWindow(0, 0.2)
-        if a.text() == 'zoomIn':
+        if action.text() == 'zoom_in':
             self.canvas.scaleWorldWindow(1/(1.1))
-        if a.text() == 'zoomOut':
+        if action.text() == 'zoom_out':
             self.canvas.scaleWorldWindow(1.1)
-        if a.text() == 'reset':
+        if action.text() == 'reset':
             self.canvas.reset()
+        if action.text() == 'grid':
+            self.canvas.generateGrid()

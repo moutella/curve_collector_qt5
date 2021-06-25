@@ -84,7 +84,7 @@ class MyCanvas(QtOpenGL.QGLWidget):
                 glVertex2f(vtx.getX(), vtx.getY())
             glEnd()
             curves = self.m_model.getCurves()
-            glColor3f(0.0, 0.0, 1.0)  # blue
+            glColor3f(1.0, 0.0, 1.0)  # blue
             glBegin(GL_LINES)
             for curv in curves:
                 glVertex2f(curv.getP1().getX(), curv.getP1().getY())
@@ -98,7 +98,7 @@ class MyCanvas(QtOpenGL.QGLWidget):
                 pts = pat.getPoints()
                 triangs = Tesselation.tessellate(pts)
                 for j in range(0, len(triangs)):
-                    glColor3f(1.0, 0.0, 1.0)
+                    glColor3f(0.3, 0.8, .8)
                     glBegin(GL_TRIANGLES)
                     glVertex2d(pts[triangs[j][0]].getX(),
                                pts[triangs[j][0]].getY())
@@ -129,6 +129,8 @@ class MyCanvas(QtOpenGL.QGLWidget):
     def mousePressEvent(self, event):
         self.m_buttonPressed = True
         self.m_pt0 = event.pos() * 2
+        self.m_pt1 = self.m_pt0
+        self.update()
 
     def mouseMoveEvent(self, event):
         if self.m_buttonPressed:
@@ -138,6 +140,9 @@ class MyCanvas(QtOpenGL.QGLWidget):
     def mouseReleaseEvent(self, event):
         pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
         pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
+        if pt0_U.x() == pt1_U.x() and pt0_U.y() == pt1_U.y():
+            # Missclick, não adicionar reta sem tamanho
+            return
         self.m_model.setCurve(pt0_U.x(), pt0_U.y(), pt1_U.x(), pt1_U.y())
         p0 = Point(pt0_U.x(), pt0_U.y())
         p1 = Point(pt1_U.x(), pt1_U.y())
@@ -149,6 +154,7 @@ class MyCanvas(QtOpenGL.QGLWidget):
         self.m_pt0.setY(0.0)
         self.m_pt1.setX(0.0)
         self.m_pt1.setY(0.0)
+        self.update()
 
     def setModel(self, _model):
         self.m_model = _model
@@ -209,4 +215,6 @@ class MyCanvas(QtOpenGL.QGLWidget):
 
     def reset(self):
         self.m_model.deleteCurves()
+        self.m_hmodel.clearAll()
         self.update()
+        self.paintGL()

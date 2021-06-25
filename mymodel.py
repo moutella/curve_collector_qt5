@@ -1,5 +1,3 @@
-
-
 class MyPoint:
 
     def __init__(self, _x=0, _y=0):
