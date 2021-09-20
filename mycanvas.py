@@ -1,12 +1,24 @@
+import numpy
+from datetime import datetime
+from math import floor, ceil
+
+from numpy.lib.function_base import select
 
 from he.hecontroller import HeController
 from he.hemodel import HeModel
 from geometry.segments.line import Line
 from geometry.point import Point
 from compgeom.tesselation import Tesselation
+from compgeom.compgeom import CompGeom
+
 from PyQt5 import QtOpenGL, QtCore
 from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
 from OpenGL.GL import *
+from math import *
+
+DRAW_STATE = 1
+SELECT_STATE = 2
 
 
 class MyCanvas(QtOpenGL.QGLWidget):
@@ -26,9 +38,13 @@ class MyCanvas(QtOpenGL.QGLWidget):
         self.m_pt1 = QtCore.QPoint(0.0, 0.0)
         self.m_hmodel = HeModel()
         self.m_controller = HeController(self.m_hmodel)
+        self.points_inside_grid = []
+        self.state = DRAW_STATE
+        self.temperaturas = {}
+        self.t_inf = 0
 
     def initializeGL(self):
-        #glClearColor(1.0, 1.0, 1.0, 1.0)
+        # glClearColor(1.0, 1.0, 1.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT)
         # enable smooth line display
         glEnable(GL_LINE_SMOOTH)
@@ -51,7 +67,7 @@ class MyCanvas(QtOpenGL.QGLWidget):
         glLoadIdentity()
         # establish the clipping volume by setting up an
         # orthographic projection
-        #glOrtho(0.0, self.m_w, 0.0, self.m_h, -1.0, 1.0)
+        # glOrtho(0.0, self.m_w, 0.0, self.m_h, -1.0, 1.0)
         glOrtho(self.m_L, self.m_R, self.m_B, self.m_T, -1.0, 1.0)
         # setup display in model coordinates
         glMatrixMode(GL_MODELVIEW)
@@ -69,13 +85,14 @@ class MyCanvas(QtOpenGL.QGLWidget):
         # Display model polygon RGB color at its vertices
         # interpolating smoothly the color in the interior
         # glShadeModel(GL_SMOOTH)
-        pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
-        pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
-        glColor3f(1.0, 0.0, 0.0)
-        glBegin(GL_LINE_STRIP)
-        glVertex2f(pt0_U.x(), pt0_U.y())
-        glVertex2f(pt1_U.x(), pt1_U.y())
-        glEnd()
+        if self.state == DRAW_STATE:
+            pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
+            pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
+            glColor3f(1.0, 0.0, 0.0)
+            glBegin(GL_LINE_STRIP)
+            glVertex2f(pt0_U.x(), pt0_U.y())
+            glVertex2f(pt1_U.x(), pt1_U.y())
+            glEnd()
         if not((self.m_model == None) and (self.m_model.isEmpty())):
             verts = self.m_model.getVerts()
             glColor3f(0.0, 1.0, 0.0)  # green
@@ -84,7 +101,7 @@ class MyCanvas(QtOpenGL.QGLWidget):
                 glVertex2f(vtx.getX(), vtx.getY())
             glEnd()
             curves = self.m_model.getCurves()
-            glColor3f(1.0, 0.0, 1.0)  # blue
+            glColor3f(0.0, 0.0, 1.0)  # blue
             glBegin(GL_LINES)
             for curv in curves:
                 glVertex2f(curv.getP1().getX(), curv.getP1().getY())
@@ -117,6 +134,36 @@ class MyCanvas(QtOpenGL.QGLWidget):
                         glVertex2f(ptc[1].getX(), ptc[1].getY())
                     glEnd()
 
+        glPointSize(5)
+        for id, point in enumerate(self.points_inside_grid):
+            if id in self.temperaturas.keys():
+                glColor3f(1.0, 0.0, 0.0)  # red
+            else:
+                glColor3f(0.0, 1.0, 0.0)  # green
+            glBegin(GL_LINE_LOOP)
+            for angulo in range(0, 360, 2):
+                radiano = (angulo * pi) / 180
+
+                glVertex2f(point.getX() + self.step_x/4 * cos(radiano),
+                           point.getY() + self.step_x/4 * sin(radiano))
+            glEnd()
+
+            glBegin(GL_POINTS)
+            glVertex2f(point.getX(), point.getY())
+            glEnd()
+
+        if self.state == SELECT_STATE:
+            pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
+            pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
+            glColor3f(1.0, 0.0, 0.0)
+            glBegin(GL_LINE_STRIP)
+            glVertex2f(pt0_U.x(), pt0_U.y())
+            glVertex2f(pt1_U.x(), pt0_U.y())
+            glVertex2f(pt1_U.x(), pt1_U.y())
+            glVertex2f(pt0_U.x(), pt1_U.y())
+            glVertex2f(pt0_U.x(), pt0_U.y())
+            glEnd()
+
     def convertPtCoordsToUniverse(self, _pt):
         dX = self.m_R - self.m_L
         dY = self.m_T - self.m_B
@@ -126,35 +173,48 @@ class MyCanvas(QtOpenGL.QGLWidget):
         y = self.m_B + mY
         return QtCore.QPointF(x, y)
 
+    def convertCoordsToUniverse(self, coordX, coordY):
+        dX = self.m_R - self.m_L
+        dY = self.m_T - self.m_B
+        mX = coordX * dX / self.m_w
+        mY = (self.m_h - coordY) * dY / self.m_h
+        x = self.m_L + mX
+        y = self.m_B + mY
+        return x, y
+
     def mousePressEvent(self, event):
         self.m_buttonPressed = True
         self.m_pt0 = event.pos() * 2
+        # self.m_pt0 = event.pos()
         self.m_pt1 = self.m_pt0
-        self.update()
 
     def mouseMoveEvent(self, event):
         if self.m_buttonPressed:
+            # self.m_pt1 = event.pos()
             self.m_pt1 = event.pos() * 2
             self.update()
 
     def mouseReleaseEvent(self, event):
-        pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
-        pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
-        if pt0_U.x() == pt1_U.x() and pt0_U.y() == pt1_U.y():
-            # Missclick, não adicionar reta sem tamanho
-            return
-        self.m_model.setCurve(pt0_U.x(), pt0_U.y(), pt1_U.x(), pt1_U.y())
-        p0 = Point(pt0_U.x(), pt0_U.y())
-        p1 = Point(pt1_U.x(), pt1_U.y())
-        segment = Line(p0, p1)
-        self.m_controller.insertSegment(segment, 0.01)
-        # self.m_model.setCurve(self.m_pt0.x(),self.m_pt0.y(),self.m_pt1.x(),self.m_pt1.y())
-        self.m_buttonPressed = False
-        self.m_pt0.setX(0.0)
-        self.m_pt0.setY(0.0)
-        self.m_pt1.setX(0.0)
-        self.m_pt1.setY(0.0)
-        self.update()
+        if self.state == DRAW_STATE:
+            pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
+            pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
+            if pt0_U.x() == pt1_U.x() and pt0_U.y() == pt1_U.y():
+                # Missclick, não adicionar reta sem tamanho
+                return
+            self.m_model.setCurve(pt0_U.x(), pt0_U.y(), pt1_U.x(), pt1_U.y())
+            p0 = Point(pt0_U.x(), pt0_U.y())
+            p1 = Point(pt1_U.x(), pt1_U.y())
+            segment = Line(p0, p1)
+            self.m_controller.insertSegment(segment, 0.01)
+            # self.m_model.setCurve(self.m_pt0.x(),self.m_pt0.y(),self.m_pt1.x(),self.m_pt1.y())
+            self.m_buttonPressed = False
+            self.m_pt0.setX(0.0)
+            self.m_pt0.setY(0.0)
+            self.m_pt1.setX(0.0)
+            self.m_pt1.setY(0.0)
+            self.update()
+        if self.state == SELECT_STATE:
+            self.chooseTemp()
 
     def setModel(self, _model):
         self.m_model = _model
@@ -216,5 +276,163 @@ class MyCanvas(QtOpenGL.QGLWidget):
     def reset(self):
         self.m_model.deleteCurves()
         self.m_hmodel.clearAll()
+        self.points_inside_grid = []
         self.update()
+
         self.paintGL()
+
+    def debug(self):
+        print(self.m_model)
+        bound_box = self.m_hmodel.getBoundBox()
+        print("BOUNDING BOX:")
+        print(bound_box)
+        print("🎁")
+
+    def print_convex_hull(self):
+        print("-"*100)
+        print(datetime.now().time())
+        if not(self.m_hmodel.isEmpty()):
+            patches = self.m_hmodel.getPatches()
+            if not patches:
+                print("Model doesn't have convex hulls")
+            for num, pat in enumerate(patches):
+                pts = pat.getPoints()
+                print("-"*50)
+                print(f'Fecho {num}')
+                print(pts)
+        else:
+            print("Model is empty")
+
+    def generate_grid(self, qtd_horizontal=100, qtd_vertical=100):
+        bound_box = self.m_hmodel.getBoundBox()
+        self.step_x = abs(ceil(bound_box[1])-bound_box[0])/qtd_horizontal
+        self.step_y = abs(ceil(bound_box[3])-bound_box[2])/qtd_vertical
+        if bound_box[0] != 0:
+            minX = (floor(bound_box[0]/self.step_y) + 1)*self.step_y
+        else:
+            minX = self.step_x
+        minY = (floor(bound_box[2]/self.step_y) + 1)*self.step_y
+        self.points_inside_grid = []
+        polygons = self.m_hmodel.getPatches()
+        self.matrizpontos = []
+        indice = 0
+        for y in numpy.arange(ceil(bound_box[3]), minY,  -self.step_y):
+            linhamatriz = []
+            for x in numpy.arange(minX, ceil(bound_box[1]), self.step_x):
+                p0 = Point(x, y)
+                for polygon in polygons:
+                    pts = polygon.getPoints()
+                    if CompGeom.isPointInPolygon(pts, p0):
+                        self.points_inside_grid.append(p0)
+                        indice += 1
+                        linhamatriz.append(indice)
+                    else:
+                        linhamatriz.append(0)
+            self.matrizpontos.append(linhamatriz)
+        self.update()
+        self.temperaturas = {}
+
+    def draw_bound_box(self):
+        bound_box = self.m_hmodel.getBoundBox()
+        p0 = Point(bound_box[0], bound_box[2])
+        p1 = Point(bound_box[1], bound_box[2])
+        segment = Line(p0, p1)
+        self.m_controller.insertSegment(segment, 0.01)
+
+        # p0 = Point(bound_box[0], bound_box[3])
+        # p1 = Point(bound_box[1], bound_box[3])
+        # segment = Line(p0, p1)
+        # self.m_controller.insertSegment(segment, 0.01)
+
+        p0 = Point(bound_box[0], bound_box[2])
+        p1 = Point(bound_box[0], bound_box[3])
+        segment = Line(p0, p1)
+        self.m_controller.insertSegment(segment, 0.01)
+
+        # p0 = Point(bound_box[1], bound_box[2])
+        # p1 = Point(bound_box[1], bound_box[3])
+        # segment = Line(p0, p1)
+        # self.m_controller.insertSegment(segment, 0.01)
+        self.update()
+
+    def getPointsInsideGrid(self):
+        return self.points_inside_grid
+
+    def getMatriz(self):
+        return self.matrizpontos
+
+    def createConnect(self):
+        connect = []
+        for linha_id in range(0, len(self.matrizpontos)):
+            for coluna_id in range(len(self.matrizpontos[linha_id])):
+                if not self.matrizpontos[linha_id][coluna_id]:
+                    continue
+                if linha_id != 0:
+                    cima = self.matrizpontos[linha_id-1][coluna_id]
+                else:
+                    cima = 0
+                if coluna_id != 0:
+                    esq = self.matrizpontos[linha_id][coluna_id - 1]
+                else:
+                    esq = 0
+                if linha_id != len(self.matrizpontos)-1:
+                    baixo = self.matrizpontos[linha_id+1][coluna_id]
+                else:
+                    baixo = 0
+                if coluna_id != len(self.matrizpontos[linha_id])-1:
+                    dir = self.matrizpontos[linha_id][coluna_id+1]
+                else:
+                    dir = 0
+
+                connect.append([
+                    dir,
+                    esq,
+                    baixo,
+                    cima
+                ])
+        return connect
+
+    def setSelectState(self):
+        self.state = SELECT_STATE
+
+    def setDrawState(self):
+        self.state = DRAW_STATE
+
+    def getTemperaturas(self):
+        temperaturas = []
+        for index, point in enumerate(self.points_inside_grid):
+            if index in self.temperaturas.keys():
+                temperaturas.append([1, self.temperaturas[index]])
+            else:
+                temperaturas.append([0, 0])
+        return temperaturas
+
+    def setTemperaturas(self, temperatura):
+        pt0_U = self.convertPtCoordsToUniverse(self.m_pt0)
+        pt1_U = self.convertPtCoordsToUniverse(self.m_pt1)
+        inside = [Point(pt0_U.x(), pt0_U.y()),
+                  Point(pt1_U.x(), pt0_U.y()),
+                  Point(pt1_U.x(), pt1_U.y()),
+                  Point(pt0_U.x(), pt1_U.y())]
+        for indice, point in enumerate(self.points_inside_grid):
+            if CompGeom.isPointInPolygon(inside, point):
+                self.temperaturas[indice] = temperatura
+
+    def chooseTemp(self):
+        temp, ok = QInputDialog.getText(self, 'Input Horizontal',
+                                        'Temperatura dos pontos selecionados:')
+        if not ok:
+            return
+        try:
+            temp = float(temp)
+            self.setTemperaturas(temp)
+        except:
+            QMessageBox.about(self, 'ERRO',
+                              "Erro ao transformar temperatura em ponto flutuante.")
+            return
+
+    def getSteps(self):
+        return {
+            'step_x':  self.step_x,
+            'step_y': self.step_y
+        }

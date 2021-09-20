@@ -17,7 +17,7 @@ class MyPoint:
         return self.m_y
 
     def __repr__(self):
-        return f'({self.getX()},{self.getY()}'
+        return f'({self.getX()},{self.getY()})'
 
 
 class MyCurve:
@@ -39,7 +39,7 @@ class MyCurve:
         return self.m_p2
 
     def __repr__(self):
-        return f'({self.getP1()} - {self.getP2()}'
+        return f'({self.getP1()} - {self.getP2()})'
 
 
 class MyModel:
@@ -122,7 +122,7 @@ class MyModel:
         self.m_curves = []
 
     def __str__(self):
-        return f'Vertices: {self.m_verts}\nCurvas: {self.m_curves}'
+        return f'Vertices: {self.m_verts}\nCurvas: {self.m_curves}\nBounding Box:{self.getBoundBox()}'
 
 
 '''

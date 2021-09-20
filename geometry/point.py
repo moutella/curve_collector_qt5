@@ -1,4 +1,6 @@
+from json.encoder import JSONEncoder
 import math
+from json import JSONDecoder
 
 
 class Point():
@@ -8,6 +10,9 @@ class Point():
         self.y = _y
         self.selected = False
         self.vertex = None
+
+    def __repr__(self):
+        return f'({self.x}, {self.y})'
 
     def setX(self, _x):
         self.x = _x
@@ -123,3 +128,8 @@ class Point():
         ptA = p2 - p1
         ptB = p3 - p1
         return Point.crossprod(ptA, ptB)
+
+
+class PointJSONEncoder(JSONEncoder):
+    def default(self, o):
+        return [o.getX(), o.getY()]
